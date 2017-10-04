@@ -25,31 +25,33 @@ multMatriz(Nodos, Trabajadores, Reductores, Matrix, Vector)->
 	%TODO Create outputFolder
 	blocks = readMatrixFile(Matrix).
 
-%%================================================
-%% Procesamiento del archivo de Matriz
-%%================================================
-
-readMatrixFile(File) ->
-    {ok, Device} = file:open(File,[read]),   
-    readMatrixLines(Device, 1, sets:new()).
-
-readMatrixLines(Device, S, Workers) ->
-    case io:get_line(Device, "") of
-        eof  -> file:close(Device), sets:to_list(Workers);
-		Line -> io:format("Dato: ~s ", [Line]),
-        readMatrixLines(Device, S + 1, Workers)
-	end.
-		
-
-
 
 %%================================================
-%% Funcion Map
+%% Map
 %%================================================
-map_function({Min, Max, List}, Reduce_PID) ->
-	link(Reduce_PID), % If the reduce process exits early, extra map processes will also end.
-	Result = [A * B * C || 	A <- List,
-				B <- List,
-				C <- lists:seq(Min, Max),
-				A*A + B*B == C*C andalso A + B + C == 1000],
-	Reduce_PID ! Result.
+map_function(Proc) ->
+  receive
+    {_From, {Row, Col, Val}, Vj} ->
+      Result = Val * Vj,
+      Proc ! {self(), {Row, Col, Result}},
+      map_function(Proc)
+  end.
+
+%%==================================
+%% Reduce
+%%==================================
+
+reduce_proc(From) ->
+  receive
+    {reduce, Dict} ->
+      io:format("Reduce ~n"),
+      Dict_Keys = lists:sort(dict:fetch_keys(Dict)),
+      Fun = fun(I) ->
+        L = dict:fetch(I, Dict),
+        {I, lists:sum(L)}
+      end,
+      R = lists:map(Fun, lists:seq(1, length(Dict_Keys))),
+      io:format("R = ~w~n",[R])
+  end.
+
+
